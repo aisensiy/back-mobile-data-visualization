@@ -19,11 +19,7 @@ db = MySQLdb.connect(HOST, USER, PASSWD, DATABASE, conv=conv)
 
 @app.route("/")
 def hello():
-    cursor = db.cursor()
-    sql = 'select uid, day, hour, count from gprs_hour_counts limit 10'
-    cursor.execute(sql)
-    results = cursor.fetchall()
-    return make_response(dumps(results))
+    return "test"
 
 
 @app.route("/gprs_count_by_hour/<uid>")
@@ -52,7 +48,15 @@ def gprs_count_by_day(uid):
 
 @app.route("/location_by_uid/<uid>")
 def location_by_uid(uid):
-    pass
+    cols = ['day', 'start_time', 'location']
+    cursor = db.cursor()
+    prepare_sql = """select log_date as day, start_time, location
+                        from location_logs_with_date
+                        where uid = %s order by day, start_time"""
+    cursor.execute(prepare_sql, (uid,))
+    rows = cursor.fetchall()
+    results = [dict(zip(cols, row)) for row in rows]
+    return make_response(dumps(merge_locations(results)))
 
 
 @app.route("/location_by_uid_day/<uid>/<day>")
@@ -66,9 +70,7 @@ def location_by_uid_day(uid, day):
     cursor.execute(prepare_sql, (uid, day))
     rows = cursor.fetchall()
     results = [dict(zip(cols, row)) for row in rows]
-
-    results = map(__remove_day, results)
-    return make_response(dumps(merge_locations(results)))
+    return make_response(dumps(merge_locations_by_date(results)))
 
 
 @app.route("/app_log_by_uid_day/<uid>/<day>")
@@ -85,7 +87,7 @@ def app_log_by_uid_day(uid, day):
     return make_response(dumps(results))
 
 
-def merge_locations(logs):
+def merge_locations_by_date(logs):
     result = []
     location = None
     start_time = None
@@ -114,12 +116,28 @@ def merge_locations(logs):
     return result
 
 
-def __remove_day(obj):
-    """
-    remove day in start_time
-    """
-    obj['start_time'] = obj['start_time'][8:]
-    return obj
+def merge_locations(logs):
+    group_by_day = []
+    last_day = None
+    one_day_locations = []
+    for log in logs:
+        cur_day = log['day']
+        if last_day is not None and last_day != cur_day:
+            group_by_day.append({
+                'date': last_day[-2:],
+                'locations': merge_locations_by_date(one_day_locations)
+            })
+            one_day_locations = []
+        last_day = cur_day
+        one_day_locations.append(log)
+
+    group_by_day.append({
+        'date': last_day,
+        'locations': merge_locations_by_date(one_day_locations)
+    })
+
+    return group_by_day
+
 
 
 if __name__ == "__main__":
