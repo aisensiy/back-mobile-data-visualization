@@ -25,6 +25,7 @@ def hello():
 @app.route("/gprs_count_by_hour/<uid>")
 def gprs_count_by_hour(uid):
     cols = ['uid', 'day', 'hour', 'count']
+    db.ping(True)
     cursor = db.cursor()
     prepare_sql = """select uid, day, hour, count from gprs_hour_counts
                         where uid = %s"""
@@ -37,6 +38,7 @@ def gprs_count_by_hour(uid):
 @app.route("/gprs_count_by_day/<uid>")
 def gprs_count_by_day(uid):
     cols = ['uid', 'day', 'count']
+    db.ping(True)
     cursor = db.cursor()
     prepare_sql = """select uid, day, sum(count) as count from gprs_hour_counts
                         where uid = %s group by day"""
@@ -46,9 +48,23 @@ def gprs_count_by_day(uid):
     return make_response(dumps(results))
 
 
+@app.route("/location/daycount/<uid>")
+def location_daycount_by_uid(uid):
+    db.ping(True)
+    cursor = db.cursor()
+    prepare_sql = """select distinct(log_date) as day
+                        from location_logs_with_date
+                        where uid = %s"""
+    cursor.execute(prepare_sql, (uid,))
+    rows = cursor.fetchall()
+    results = [row[0] for row in rows]
+    return make_response(dumps(results))
+
+
 @app.route("/location_by_uid/<uid>")
 def location_by_uid(uid):
     cols = ['day', 'start_time', 'location']
+    db.ping(True)
     cursor = db.cursor()
     prepare_sql = """select log_date as day, start_time, location
                         from location_logs_with_date
@@ -63,6 +79,7 @@ def location_by_uid(uid):
 def location_by_uid_day(uid, day):
     day = '201312' + day
     cols = ['start_time', 'location']
+    db.ping(True)
     cursor = db.cursor()
     prepare_sql = """select start_time, location
                         from location_logs_with_date
@@ -77,6 +94,7 @@ def location_by_uid_day(uid, day):
 def app_log_by_uid_day(uid, day):
     cols = ['minute', 'busi_name', 'app_name',
             'site_name', 'site_channel_name', 'domain', 'count']
+    db.ping(True)
     cursor = db.cursor()
     prepare_sql = """select minute, busi_name, app_name, site_name, site_channel_name, domain, count
                             from app_domain_logs
@@ -137,7 +155,6 @@ def merge_locations(logs):
     })
 
     return group_by_day
-
 
 
 if __name__ == "__main__":
