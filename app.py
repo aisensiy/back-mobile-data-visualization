@@ -184,7 +184,7 @@ def merge_locations(logs):
         one_day_locations.append(log)
 
     group_by_day.append({
-        'date': last_day,
+        'date': last_day[-2:],
         'locations': merge_locations_by_date(one_day_locations)
     })
 
