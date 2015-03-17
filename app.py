@@ -17,9 +17,43 @@ conv[246] = int
 db = MySQLdb.connect(HOST, USER, PASSWD, DATABASE, conv=conv)
 
 
-@app.route("/")
-def hello():
-    return "test"
+@app.route("/usercount")
+def usercount():
+    db.ping(True)
+    cursor = db.cursor()
+    prepare_sql = """
+    select count(1) from users where high = 1"""
+    cursor.execute(prepare_sql)
+    row = cursor.fetchone()
+    return make_response(dumps(row[0]))
+
+
+@app.route('/users/<uid>')
+def user(uid):
+    cols = ['uid', 'gender', 'age', 'brand_chn', 'call_fee', 'gprs_fee', 'dept_name']
+    db.ping(True)
+    cursor = db.cursor()
+    prepare_sql = """
+    select uid, gender, age, brand_chn, call_fee, gprs_fee, dept_name
+        from users where uid = %s"""
+    cursor.execute(prepare_sql, (uid,))
+    row = cursor.fetchone()
+    result = dict(zip(cols, row))
+    return make_response(dumps(result))
+
+
+@app.route("/users/<int:offset>/<int:limit>")
+def users(offset, limit):
+    cols = ['uid', 'gender', 'age', 'brand_chn', 'call_fee', 'gprs_fee', 'dept_name']
+    db.ping(True)
+    cursor = db.cursor()
+    prepare_sql = """
+    select uid, gender, age, brand_chn, call_fee, gprs_fee, dept_name
+        from users where high = 1 limit %s offset %s"""
+    cursor.execute(prepare_sql, (limit, offset))
+    rows = cursor.fetchall()
+    results = [dict(zip(cols, row)) for row in rows]
+    return make_response(dumps(results))
 
 
 @app.route("/gprs_count_by_hour/<uid>")
