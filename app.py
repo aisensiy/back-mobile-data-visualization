@@ -7,7 +7,7 @@ from flask.ext.cors import CORS
 import MySQLdb
 import MySQLdb.converters
 from config import HOST, USER, PASSWD, DATABASE
-from get_stop import get_stop, get_delta
+from get_stop import get_stop, get_delta, get_stop_by_day, get_delta_by_day
 
 app = Flask(__name__)
 cors = CORS(app)
@@ -140,6 +140,23 @@ def location_by_uid_day(uid, day):
     rows = cursor.fetchall()
     results = [dict(zip(cols, row)) for row in rows]
     return make_response(dumps(merge_locations_by_date(results)))
+
+
+@app.route("/location_by_uid_day_stop/<uid>/<day>")
+def location_by_uid_day_stop(uid, day):
+    day = '201312' + day
+    cols = ['start_time', 'location']
+    db.ping(True)
+    cursor = db.cursor()
+    prepare_sql = """select start_time, location
+                        from location_logs_with_date
+                        where uid = %s and log_date = %s order by start_time"""
+    cursor.execute(prepare_sql, (uid, day))
+    rows = cursor.fetchall()
+    results = merge_locations_by_date([dict(zip(cols, row)) for row in rows])
+    get_delta_by_day(results)
+    results = get_stop_by_day(results)
+    return make_response(dumps(results))
 
 
 @app.route("/app_log_by_uid_day/<uid>/<day>")
