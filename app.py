@@ -127,6 +127,21 @@ def location_by_uid_stop(uid):
     return make_response(dumps(locations))
 
 
+@app.route("/raw_location_by_uid_day/<uid>/<day>")
+def raw_location_by_uid_day(uid, day):
+    day = '201312' + day
+    cols = ['start_time', 'location']
+    db.ping(True)
+    cursor = db.cursor()
+    prepare_sql = """select start_time, location
+                        from location_logs_with_date
+                        where uid = %s and log_date = %s order by start_time"""
+    cursor.execute(prepare_sql, (uid, day))
+    rows = cursor.fetchall()
+    results = [dict(zip(cols, row)) for row in rows]
+    return make_response(dumps(results))
+
+
 @app.route("/location_by_uid_day/<uid>/<day>")
 def location_by_uid_day(uid, day):
     day = '201312' + day
