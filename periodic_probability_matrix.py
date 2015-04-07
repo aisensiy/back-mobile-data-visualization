@@ -52,4 +52,4 @@ if __name__ == '__main__':
         for location, row in result.items():
             print location
             print ' '.join(map(lambda x: "%.3f" % x, row))
-    print_result(result)
+    print json.dumps(result)

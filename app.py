@@ -8,6 +8,7 @@ import MySQLdb
 import MySQLdb.converters
 from config import HOST, USER, PASSWD, DATABASE
 from get_stop import get_stop, get_delta, get_stop_by_day, get_delta_by_day
+from periodic_probability_matrix import generate_matrix
 
 app = Flask(__name__)
 cors = CORS(app)
@@ -110,8 +111,7 @@ def location_by_uid(uid):
     return make_response(dumps(merge_locations(results)))
 
 
-@app.route("/location_by_uid_stop/<uid>")
-def location_by_uid_stop(uid):
+def _location_by_uid_stop(uid):
     cols = ['day', 'start_time', 'location']
     db.ping(True)
     cursor = db.cursor()
@@ -124,7 +124,12 @@ def location_by_uid_stop(uid):
     locations = merge_locations(results)
     get_delta(locations)
     locations = get_stop(locations, 60)
-    return make_response(dumps(locations))
+    return locations
+
+
+@app.route("/location_by_uid_stop/<uid>")
+def location_by_uid_stop(uid):
+    return make_response(dumps(_location_by_uid_stop(uid)))
 
 
 @app.route("/raw_location_by_uid_day/<uid>/<day>")
@@ -187,6 +192,12 @@ def app_log_by_uid_day(uid, day):
     rows = cursor.fetchall()
     results = [dict(zip(cols, row)) for row in rows]
     return make_response(dumps(results))
+
+
+@app.route("/proba_matrix/<uid>")
+def proba_matrix(uid):
+    locations = _location_by_uid_stop(uid)
+    return make_response(dumps(generate_matrix(locations)))
 
 
 def merge_locations_by_date(logs):
