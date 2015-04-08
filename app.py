@@ -18,6 +18,7 @@ conv = MySQLdb.converters.conversions.copy()
 conv[246] = int
 db = MySQLdb.connect(HOST, USER, PASSWD, DATABASE, conv=conv)
 
+holidays = ['01', '07', '08', '14', '15', '21', '22', '28', '29']
 
 @app.route("/usercount")
 def usercount():
@@ -127,6 +128,16 @@ def _location_by_uid_stop(uid):
     return locations
 
 
+def _location_by_uid_stop_holiday(uid):
+    locations = _location_by_uid_stop(uid)
+    return [data for data in locations if  data['date'] in holidays]
+
+
+def _location_by_uid_stop_workday(uid):
+    locations = _location_by_uid_stop(uid)
+    return [data for data in locations if  data['date'] not in holidays]
+
+
 @app.route("/location_by_uid_stop/<uid>")
 def location_by_uid_stop(uid):
     return make_response(dumps(_location_by_uid_stop(uid)))
@@ -197,6 +208,18 @@ def app_log_by_uid_day(uid, day):
 @app.route("/proba_matrix/<uid>")
 def proba_matrix(uid):
     locations = _location_by_uid_stop(uid)
+    return make_response(dumps(generate_matrix(locations)))
+
+
+@app.route("/proba_matrix_holiday/<uid>")
+def proba_matrix_holiday(uid):
+    locations = _location_by_uid_stop_holiday(uid)
+    return make_response(dumps(generate_matrix(locations)))
+
+
+@app.route("/proba_matrix_workday/<uid>")
+def proba_matrix_workday(uid):
+    locations = _location_by_uid_stop_workday(uid)
     return make_response(dumps(generate_matrix(locations)))
 
 
