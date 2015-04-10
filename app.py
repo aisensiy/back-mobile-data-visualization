@@ -9,6 +9,8 @@ import MySQLdb.converters
 from config import HOST, USER, PASSWD, DATABASE
 from get_stop import get_stop, get_delta, get_stop_by_day, get_delta_by_day
 from periodic_probability_matrix import generate_matrix
+from get_most_proba_locations import get_most_proba_locations, pretty_print_most_proba_locations
+from apriori import freq_seq_mining
 
 app = Flask(__name__)
 cors = CORS(app)
@@ -25,7 +27,7 @@ def usercount():
     db.ping(True)
     cursor = db.cursor()
     prepare_sql = """
-    select count(1) from users where high = 1"""
+    select count(1) from users where high = 5"""
     cursor.execute(prepare_sql)
     row = cursor.fetchone()
     return make_response(dumps(row[0]))
@@ -52,7 +54,7 @@ def users(offset, limit):
     cursor = db.cursor()
     prepare_sql = """
     select uid, gender, age, brand_chn, call_fee, gprs_fee, dept_name
-        from users where high = 1 limit %s offset %s"""
+        from users where high = 5 limit %s offset %s"""
     cursor.execute(prepare_sql, (limit, offset))
     rows = cursor.fetchall()
     results = [dict(zip(cols, row)) for row in rows]
@@ -64,8 +66,8 @@ def gprs_count_by_hour(uid):
     cols = ['uid', 'day', 'hour', 'count']
     db.ping(True)
     cursor = db.cursor()
-    prepare_sql = """select uid, day, hour, count from gprs_hour_counts
-                        where uid = %s"""
+    prepare_sql = """select uid, day, substring(minute, 3, 2) as hour, count(distinct minute) as count
+                        from app_domain_logs where uid = %s group by day, hour"""
     cursor.execute(prepare_sql, (uid,))
     rows = cursor.fetchall()
     results = [dict(zip(cols, row)) for row in rows]
@@ -124,7 +126,7 @@ def _location_by_uid_stop(uid):
     results = [dict(zip(cols, row)) for row in rows]
     locations = merge_locations(results)
     get_delta(locations)
-    locations = get_stop(locations, 60)
+    locations = get_stop(locations, 30)
     return locations
 
 
@@ -221,6 +223,109 @@ def proba_matrix_holiday(uid):
 def proba_matrix_workday(uid):
     locations = _location_by_uid_stop_workday(uid)
     return make_response(dumps(generate_matrix(locations)))
+
+
+@app.route("/most_proba_locations/<uid>")
+def most_proba_locations(uid):
+    locations = _location_by_uid_stop(uid)
+    matrix = generate_matrix(locations)
+    most_proba_locations = pretty_print_most_proba_locations(get_most_proba_locations(matrix))
+    return make_response(dumps(most_proba_locations))
+
+@app.route("/most_proba_locations_workday/<uid>")
+def most_proba_locations_workday(uid):
+    locations = _location_by_uid_stop_workday(uid)
+    matrix = generate_matrix(locations)
+    most_proba_locations = pretty_print_most_proba_locations(get_most_proba_locations(matrix))
+    return make_response(dumps(most_proba_locations))
+
+
+@app.route("/most_proba_locations_holiday/<uid>")
+def most_proba_locations_holiday(uid):
+    locations = _location_by_uid_stop_holiday(uid)
+    matrix = generate_matrix(locations)
+    most_proba_locations = pretty_print_most_proba_locations(get_most_proba_locations(matrix))
+    return make_response(dumps(most_proba_locations))
+
+
+def _stop_to_seq(locations):
+    seqs = []
+    for day in locations:
+        seq = [stop['location'] for stop in day['locations']]
+        if len(seq) > 0:
+            seqs.append(seq)
+    return seqs
+
+
+@app.route("/freq_seq/<uid>")
+def freq_seq(uid):
+    import pprint
+    locations = _location_by_uid_stop(uid)
+    dataset = _stop_to_seq(locations)
+    L, supportData = freq_seq_mining(dataset, 5)
+    flattenL = []
+    for ck in L:
+        flattenL += ck
+    flattenL = [seq for seq in flattenL if len(seq) > 1]
+    return make_response(dumps(flattenL))
+
+
+@app.route("/web_req_histgram/<uid>")
+def web_req_histgram(uid):
+    cols = ['hour', 'count']
+    db.ping(True)
+    cursor = db.cursor()
+    prepare_sql = """select cast(substring(minute, 3, 2) as SIGNED) as hour, count(distinct minute) as count
+                        from app_domain_logs where uid = %s group by hour"""
+
+    cursor.execute(prepare_sql, (uid,))
+    rows = cursor.fetchall()
+    results = [dict(zip(cols, row)) for row in rows]
+    return make_response(dumps(results))
+
+
+@app.route("/site_count/<uid>")
+def site_count(uid):
+    cols = ['site_name', 'count']
+    db.ping(True)
+    cursor = db.cursor()
+    prepare_sql = """select site_name, count(1) as count from app_domain_logs
+                        where uid = %s group by site_name
+                        order by count desc limit 10"""
+
+    cursor.execute(prepare_sql, (uid,))
+    rows = cursor.fetchall()
+    results = [dict(zip(cols, row)) for row in rows]
+    return make_response(dumps(results))
+
+
+@app.route("/app_count/<uid>")
+def app_count(uid):
+    cols = ['app_name', 'count']
+    db.ping(True)
+    cursor = db.cursor()
+    prepare_sql = """select app_name, count(1) as count from app_domain_logs
+                        where uid = %s group by app_name
+                        order by count desc limit 10"""
+
+    cursor.execute(prepare_sql, (uid,))
+    rows = cursor.fetchall()
+    results = [dict(zip(cols, row)) for row in rows]
+    return make_response(dumps(results))
+
+
+@app.route("/call_histgram/<uid>")
+def call_histgram(uid):
+    cols = ['hour', 'count']
+    db.ping(True)
+    cursor = db.cursor()
+    prepare_sql = """select hour(start_time) as hour, count(1) as count
+                        from calls where uid = %s group by hour"""
+
+    cursor.execute(prepare_sql, (uid,))
+    rows = cursor.fetchall()
+    results = [dict(zip(cols, row)) for row in rows]
+    return make_response(dumps(results))
 
 
 def merge_locations_by_date(logs):
