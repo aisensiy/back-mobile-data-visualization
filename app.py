@@ -11,6 +11,8 @@ from get_stop import get_stop, get_delta, get_stop_by_day, get_delta_by_day
 from periodic_probability_matrix import generate_matrix
 from get_most_proba_locations import get_most_proba_locations, pretty_print_most_proba_locations
 from apriori import freq_seq_mining
+from get_move import get_moves
+from get_transient_entropy import transient_entropy
 
 app = Flask(__name__)
 cors = CORS(app)
@@ -158,6 +160,30 @@ def raw_location_by_uid_day(uid, day):
     rows = cursor.fetchall()
     results = [dict(zip(cols, row)) for row in rows]
     return make_response(dumps(results))
+
+
+@app.route("/entropy_by_uid_day/<uid>/<day>")
+def entropy_by_uid_day(uid, day):
+    day = '201312' + day
+    cols = ['start_time', 'location']
+    db.ping(True)
+    cursor = db.cursor()
+    prepare_sql = """select start_time, location
+                        from location_logs_with_date
+                        where uid = %s and log_date = %s order by start_time"""
+    cursor.execute(prepare_sql, (uid, day))
+    rows = cursor.fetchall()
+    results = merge_locations_by_date([dict(zip(cols, row)) for row in rows])
+    get_delta_by_day(results)
+    moves = get_moves(results)
+    result = []
+    for move in moves:
+        for location in move:
+            result.append({
+                'entropy': transient_entropy(location, move),
+                'time': location['start_time']
+            })
+    return make_response(dumps(result))
 
 
 @app.route("/location_by_uid_day/<uid>/<day>")
