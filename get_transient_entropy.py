@@ -29,9 +29,10 @@ def transient_entropy(location, move):
     move_end = str2date(move[-1]['end_time'])
 
     if move_start > time_range[0]:
-        delta_t -= (move_start - time_range[0]).total_seconds() / 60.0
+        location_time_ranges['before'] = (move_start - time_range[0]).total_seconds() / 60.0
     if move_end < time_range[1]:
-        delta_t -= (time_range[1] - move_end).total_seconds() / 60.0
+        location_time_ranges['after'] = (time_range[1] - move_end).total_seconds() / 60.0
+        # delta_t -= (time_range[1] - move_end).total_seconds() / 60.0
 
     last_end_time = None
     last_location = None

@@ -354,6 +354,24 @@ def call_histgram(uid):
     return make_response(dumps(results))
 
 
+@app.route("/semantic_data/<uid>")
+def semantic_data(uid):
+    locations = _location_by_uid_stop(uid)
+    result = set()
+    for day in locations:
+        for item in day['locations']:
+            result.add(item['location'])
+    cols = ['location', 'station_desc', 'tags', 'addr', 'business']
+    cursor = db.cursor()
+    prepare_sql = """select location, station_desc, tags, addr, business from location_desc where location in (%s)""" % \
+        ','.join(map(lambda x: "'" + x + "'", result))
+    cursor.execute(prepare_sql)
+    rows = cursor.fetchall()
+    results = [dict(zip(cols, row)) for row in rows]
+    return make_response(dumps(list(results)))
+
+
+
 def merge_locations_by_date(logs):
     result = []
     location = None
