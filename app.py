@@ -8,11 +8,14 @@ import MySQLdb
 import MySQLdb.converters
 from config import HOST, USER, PASSWD, DATABASE
 from get_stop import get_stop, get_delta, get_stop_by_day, get_delta_by_day
+from get_stop import date2str
 from periodic_probability_matrix import generate_matrix
 from get_most_proba_locations import get_most_proba_locations, pretty_print_most_proba_locations
 from apriori import freq_seq_mining
 from get_move import get_moves
-from get_transient_entropy import transient_entropy
+from get_transient_entropy import transient_entropy, entropy
+import pandas as pd
+import datetime
 
 app = Flask(__name__)
 cors = CORS(app)
@@ -184,6 +187,42 @@ def entropy_by_uid_day(uid, day):
                 'time': location['start_time']
             })
     return make_response(dumps(result))
+
+
+@app.route("/speed_by_uid_day/<uid>/<day>")
+def speed_by_uid_day(uid, day):
+    day = '201312' + day
+    timestamps = pd.date_range(start=day + '001500',
+                               end=day + '235959',
+                               freq='30Min')
+    cols = ['start_time', 'location']
+    speeds = []
+
+    db.ping(True)
+    cursor = db.cursor()
+    prepare_sql = """select start_time, location
+                        from location_logs_with_date
+                        where uid = %s and start_time >= %s and start_time <= %s order by start_time"""
+    for i in range(len(timestamps)):
+        start_time = timestamps[i] - datetime.timedelta(seconds=300)
+        end_time = timestamps[i] + datetime.timedelta(seconds=300)
+        cursor.execute(prepare_sql,
+                       (uid, date2str(start_time), date2str(end_time)))
+        rows = cursor.fetchall()
+        if len(rows) == 0:
+            speeds.append({
+                'time': date2str(timestamps[i]),
+                'speed': -1
+            })
+            continue
+        rows = merge_locations_by_date([dict(zip(cols, row)) for row in rows])
+        get_delta_by_day(rows)
+        speed = entropy(rows, 10, [start_time, end_time])
+        speeds.append({
+            'time': date2str(timestamps[i]),
+            'speed': speed
+        })
+    return make_response(dumps(speeds))
 
 
 @app.route("/location_by_uid_day/<uid>/<day>")

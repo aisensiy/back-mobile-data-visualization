@@ -17,9 +17,56 @@ def get_location_in_range(move, start, end):
     return result
 
 
+def entropy(move, delta_t, time_range):
+    location_time_ranges = {}
+
+    move_start = str2date(move[0]['start_time'])
+    move_end = str2date(move[-1]['end_time'])
+    if move_start > time_range[0]:
+        location_time_ranges['before'] = (move_start - time_range[0]).total_seconds() / 60.0
+    if move_end < time_range[1]:
+        location_time_ranges['after'] = (time_range[1] - move_end).total_seconds() / 60.0
+
+    last_end_time = None
+    last_location = None
+    last_duration = None
+    last_start_time = None
+    for location in move:
+        cur_location = location['location']
+        cur_start_time = str2date(location['start_time'])
+        cur_end_time = str2date(location['end_time'])
+        cur_duration = location['duration']
+        location_time_ranges.setdefault(cur_location, 0)
+
+        if last_end_time:
+            location_time_ranges[last_location] += (cur_start_time - last_end_time).total_seconds() / 60.0
+            from_ts = max(time_range[0], last_start_time)
+            to_ts = min(time_range[1], last_end_time)
+            location_time_ranges[last_location] += (to_ts - from_ts).total_seconds() / 60.0
+
+        last_start_time = cur_start_time
+        last_end_time = cur_end_time
+        last_location = cur_location
+        last_duration = cur_duration
+
+    if location:
+        from_ts = max(time_range[0], last_start_time)
+        to_ts = min(time_range[1], last_end_time)
+        location_time_ranges[last_location] += (to_ts - from_ts).total_seconds() / 60.0
+
+    for location in location_time_ranges.keys():
+        location_time_ranges[location] /= delta_t
+
+    entropy = sum([-1 * proba * math.log(proba, 2) for proba in location_time_ranges.values() if proba > 0])
+    return entropy
+
+
 def transient_entropy(location, move):
     delta_t = 10
+
+    # set start_time
     start_time = str2date(location['start_time'])
+    # get - t/2 and + t/2
     time_range = [start_time - datetime.timedelta(minutes=delta_t / 2),
                   start_time + datetime.timedelta(minutes=delta_t / 2)]
     location_in_ranges = get_location_in_range(move, time_range[0], time_range[1])

@@ -3,8 +3,13 @@
 
 import datetime
 
+
 def str2date(string):
     return datetime.datetime.strptime(string, '%Y%m%d%H%M%S')
+
+
+def date2str(date):
+    return date.strftime('%Y%m%d%H%M%S')
 
 
 def format_in_one_day(date):
