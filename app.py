@@ -206,9 +206,10 @@ def speed_by_uid_day(uid, day):
     cursor.execute(prepare_sql, (uid, day))
     all_rows = cursor.fetchall()
 
+    delta_t = 30
     for i in range(len(timestamps)):
-        start_time = timestamps[i] - datetime.timedelta(seconds=300)
-        end_time = timestamps[i] + datetime.timedelta(seconds=300)
+        start_time = timestamps[i].to_datetime() - datetime.timedelta(minutes=delta_t / 2)
+        end_time = timestamps[i].to_datetime() + datetime.timedelta(minutes=delta_t / 2)
         rows = filter(lambda x: date2str(start_time) <= x[0] <= date2str(end_time),
                       all_rows)
         if len(rows) == 0:
@@ -219,7 +220,7 @@ def speed_by_uid_day(uid, day):
             continue
         rows = merge_locations_by_date([dict(zip(cols, row)) for row in rows])
         get_delta_by_day(rows)
-        speed = entropy(rows, 10, [start_time, end_time])
+        speed = entropy(rows, delta_t, [start_time, end_time])
         speeds.append({
             'time': date2str(timestamps[i]),
             'speed': speed

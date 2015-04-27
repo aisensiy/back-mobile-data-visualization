@@ -18,14 +18,21 @@ def get_location_in_range(move, start, end):
 
 
 def entropy(move, delta_t, time_range):
+    if len(move) <= 1:
+        return 0
+
     location_time_ranges = {}
 
     move_start = str2date(move[0]['start_time'])
     move_end = str2date(move[-1]['end_time'])
+
     if move_start > time_range[0]:
-        location_time_ranges['before'] = (move_start - time_range[0]).total_seconds() / 60.0
+        delta_t -= (move_start - time_range[0]).total_seconds() / 60.0
     if move_end < time_range[1]:
-        location_time_ranges['after'] = (time_range[1] - move_end).total_seconds() / 60.0
+        delta_t -= (time_range[1] - move_end).total_seconds() / 60.0
+
+    if delta_t <= 0:
+        return 0
 
     last_end_time = None
     last_location = None
