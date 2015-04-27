@@ -202,13 +202,15 @@ def speed_by_uid_day(uid, day):
     cursor = db.cursor()
     prepare_sql = """select start_time, location
                         from location_logs_with_date
-                        where uid = %s and start_time >= %s and start_time <= %s order by start_time"""
+                        where uid = %s and log_date = %s order by start_time"""
+    cursor.execute(prepare_sql, (uid, day))
+    all_rows = cursor.fetchall()
+
     for i in range(len(timestamps)):
         start_time = timestamps[i] - datetime.timedelta(seconds=300)
         end_time = timestamps[i] + datetime.timedelta(seconds=300)
-        cursor.execute(prepare_sql,
-                       (uid, date2str(start_time), date2str(end_time)))
-        rows = cursor.fetchall()
+        rows = filter(lambda x: date2str(start_time) <= x[0] <= date2str(end_time),
+                      all_rows)
         if len(rows) == 0:
             speeds.append({
                 'time': date2str(timestamps[i]),
