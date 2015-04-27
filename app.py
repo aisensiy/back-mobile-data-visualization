@@ -189,22 +189,15 @@ def entropy_by_uid_day(uid, day):
     return make_response(dumps(result))
 
 
-@app.route("/speed_by_uid_day/<uid>/<day>")
-def speed_by_uid_day(uid, day):
-    day = '201312' + day
+def _get_speed_by_day(all_rows, day):
     timestamps = pd.date_range(start=day + '001500',
                                end=day + '235959',
                                freq='30Min')
     cols = ['start_time', 'location']
     speeds = []
 
-    db.ping(True)
-    cursor = db.cursor()
-    prepare_sql = """select start_time, location
-                        from location_logs_with_date
-                        where uid = %s and log_date = %s order by start_time"""
-    cursor.execute(prepare_sql, (uid, day))
-    all_rows = cursor.fetchall()
+    if len(all_rows) == 0:
+        return speeds
 
     delta_t = 30
     for i in range(len(timestamps)):
@@ -225,7 +218,44 @@ def speed_by_uid_day(uid, day):
             'time': date2str(timestamps[i]),
             'speed': speed
         })
+    return speeds
+
+
+@app.route("/speed_by_uid_day/<uid>/<day>")
+def speed_by_uid_day(uid, day):
+    day = '201312' + day
+    speeds = []
+
+    db.ping(True)
+    cursor = db.cursor()
+    prepare_sql = """select start_time, location
+                        from location_logs_with_date
+                        where uid = %s and log_date = %s order by start_time"""
+    cursor.execute(prepare_sql, (uid, day))
+    all_rows = cursor.fetchall()
+    speeds = _get_speed_by_day(all_rows, day)
     return make_response(dumps(speeds))
+
+
+@app.route("/speed_by_uid/<uid>")
+def speed_by_uid(uid):
+    db.ping(True)
+    cursor = db.cursor()
+    prepare_sql = """select start_time, location, log_date
+                        from location_logs_with_date
+                        where uid = %s order by start_time"""
+    cursor.execute(prepare_sql, (uid,))
+    all_rows = cursor.fetchall()
+    result = []
+
+    for day in range(1, 32):
+        day = '201312%02d' % day
+        rows_by_day = filter(lambda x: x[2] == day, all_rows)
+        rows_by_day = map(lambda x: x[:2], rows_by_day)
+        speeds = _get_speed_by_day(rows_by_day, day)
+        result.append(speeds)
+
+    return make_response(dumps(result))
 
 
 @app.route("/location_by_uid_day/<uid>/<day>")
