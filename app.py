@@ -189,7 +189,7 @@ def entropy_by_uid_day(uid, day):
     return make_response(dumps(result))
 
 
-def _get_speed_by_day(all_rows, day):
+def get_speed_by_day(all_rows, day):
     timestamps = pd.date_range(start=day + '001500',
                                end=day + '235959',
                                freq='30Min')
@@ -233,7 +233,7 @@ def speed_by_uid_day(uid, day):
                         where uid = %s and log_date = %s order by start_time"""
     cursor.execute(prepare_sql, (uid, day))
     all_rows = cursor.fetchall()
-    speeds = _get_speed_by_day(all_rows, day)
+    speeds = get_speed_by_day(all_rows, day)
     return make_response(dumps(speeds))
 
 
@@ -252,7 +252,7 @@ def speed_by_uid(uid):
         day = '201312%02d' % day
         rows_by_day = filter(lambda x: x[2] == day, all_rows)
         rows_by_day = map(lambda x: x[:2], rows_by_day)
-        speeds = _get_speed_by_day(rows_by_day, day)
+        speeds = get_speed_by_day(rows_by_day, day)
         result.append(speeds)
 
     return make_response(dumps(result))
