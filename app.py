@@ -16,6 +16,7 @@ from get_move import get_moves
 from get_transient_entropy import transient_entropy, entropy
 import pandas as pd
 import datetime
+from merge_locations import merge_locations, merge_locations_by_date, raw_merge_locations_by_date, check_error_points
 
 app = Flask(__name__)
 cors = CORS(app)
@@ -27,12 +28,13 @@ db = MySQLdb.connect(HOST, USER, PASSWD, DATABASE, conv=conv)
 
 holidays = ['01', '07', '08', '14', '15', '21', '22', '28', '29']
 
+
 @app.route("/usercount")
 def usercount():
     db.ping(True)
     cursor = db.cursor()
     prepare_sql = """
-    select count(1) from users where high = 5"""
+    select count(1) from users where high = 7"""
     cursor.execute(prepare_sql)
     row = cursor.fetchone()
     return make_response(dumps(row[0]))
@@ -59,7 +61,7 @@ def users(offset, limit):
     cursor = db.cursor()
     prepare_sql = """
     select uid, gender, age, brand_chn, call_fee, gprs_fee, dept_name
-        from users where high = 5 limit %s offset %s"""
+        from users where high = 7 limit %s offset %s"""
     cursor.execute(prepare_sql, (limit, offset))
     rows = cursor.fetchall()
     results = [dict(zip(cols, row)) for row in rows]
@@ -162,6 +164,9 @@ def raw_location_by_uid_day(uid, day):
     cursor.execute(prepare_sql, (uid, day))
     rows = cursor.fetchall()
     results = [dict(zip(cols, row)) for row in rows]
+    invalids = check_error_points(raw_merge_locations_by_date(results))
+    results = filter(
+        lambda x: (x['location'], x['start_time']) not in invalids, results)
     return make_response(dumps(results))
 
 
@@ -192,14 +197,14 @@ def entropy_by_uid_day(uid, day):
 def get_speed_by_day(all_rows, day):
     timestamps = pd.date_range(start=day + '001500',
                                end=day + '235959',
-                               freq='30Min')
+                               freq='20Min')
     cols = ['start_time', 'location']
     speeds = []
 
     if len(all_rows) == 0:
         return speeds
 
-    delta_t = 30
+    delta_t = 20
     for i in range(len(timestamps)):
         start_time = timestamps[i].to_datetime() - datetime.timedelta(minutes=delta_t / 2)
         end_time = timestamps[i].to_datetime() + datetime.timedelta(minutes=delta_t / 2)
@@ -330,6 +335,7 @@ def most_proba_locations(uid):
     most_proba_locations = pretty_print_most_proba_locations(get_most_proba_locations(matrix))
     return make_response(dumps(most_proba_locations))
 
+
 @app.route("/most_proba_locations_workday/<uid>")
 def most_proba_locations_workday(uid):
     locations = _location_by_uid_stop_workday(uid)
@@ -441,59 +447,6 @@ def semantic_data(uid):
     rows = cursor.fetchall()
     results = [dict(zip(cols, row)) for row in rows]
     return make_response(dumps(list(results)))
-
-
-
-def merge_locations_by_date(logs):
-    result = []
-    location = None
-    start_time = None
-    last_start_time = None
-    for log in logs:
-        cur_start_time = log['start_time']
-        cur_location = log['location']
-        if location is None:
-            location = cur_location
-            start_time = cur_start_time
-        elif location != cur_location:
-            result.append({
-                'start_time': start_time,
-                'end_time': last_start_time,
-                'location': location
-            })
-            location = cur_location
-            start_time = cur_start_time
-        last_start_time = cur_start_time
-
-    result.append({
-        'start_time': start_time,
-        'end_time': last_start_time,
-        'location': location
-    })
-    return result
-
-
-def merge_locations(logs):
-    group_by_day = []
-    last_day = None
-    one_day_locations = []
-    for log in logs:
-        cur_day = log['day']
-        if last_day is not None and last_day != cur_day:
-            group_by_day.append({
-                'date': last_day[-2:],
-                'locations': merge_locations_by_date(one_day_locations)
-            })
-            one_day_locations = []
-        last_day = cur_day
-        one_day_locations.append(log)
-
-    group_by_day.append({
-        'date': last_day[-2:],
-        'locations': merge_locations_by_date(one_day_locations)
-    })
-
-    return group_by_day
 
 
 if __name__ == "__main__":
