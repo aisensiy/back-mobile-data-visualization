@@ -120,6 +120,29 @@ def fetch_uid_location_data(uid):
     return [dict(zip(cols, row)) for row in rows]
 
 
+def fetch_uid_semantic_data(uid):
+    cols = ['day', 'start_time', 'location', 'district', 'business']
+    db.ping(True)
+    cursor = db.cursor()
+    prepare_sql = """select a.log_date as day, a.start_time, a.location,
+                        b.district, b.business
+                        from location_logs_with_date a
+                        left join location_desc b
+                        on a.location = b.location
+                        where a.uid = %s
+                        order by a.start_time"""
+    cursor.execute(prepare_sql, (uid,))
+    rows = cursor.fetchall()
+    return [dict(zip(cols, row)) for row in rows]
+
+
+def fetch_uid_business_data(uid):
+    rows = fetch_uid_semantic_data(uid)
+    for row in rows:
+        row['location'] = row['business'] and row['business'] or row['district']
+    return rows
+
+
 @app.route("/location_by_uid/<uid>")
 def location_by_uid(uid):
     results = fetch_uid_location_data(uid)
@@ -128,6 +151,16 @@ def location_by_uid(uid):
 
 def _location_by_uid_stop(uid):
     results = fetch_uid_location_data(uid)
+    locations = merge_locations(results)
+    get_delta(locations)
+    locations = get_stop(locations, 30)
+    return locations
+
+
+def _business_by_uid_stop(uid):
+    results = fetch_uid_business_data(uid)
+    invalids = check_error_points(raw_merge_locations_by_date(results))
+    results = filter(lambda x: (x['location'], x['start_time']) not in invalids, results)
     locations = merge_locations(results)
     get_delta(locations)
     locations = get_stop(locations, 30)
@@ -307,6 +340,12 @@ def app_log_by_uid_day(uid, day):
     return make_response(dumps(results))
 
 
+@app.route("/semantic_proba_matrix/<uid>")
+def semantic_proba_matrix(uid):
+    locations = _business_by_uid_stop(uid)
+    return make_response(dumps(generate_matrix(locations)))
+
+
 @app.route("/proba_matrix/<uid>")
 def proba_matrix(uid):
     locations = _location_by_uid_stop(uid)
@@ -360,7 +399,6 @@ def _stop_to_seq(locations):
 
 @app.route("/freq_seq/<uid>")
 def freq_seq(uid):
-    import pprint
     locations = _location_by_uid_stop(uid)
     dataset = _stop_to_seq(locations)
     L, supportData = freq_seq_mining(dataset, 5)
