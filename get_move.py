@@ -6,11 +6,21 @@ from get_stop import str2date
 
 
 def get_moves(data):
+    result = []
+    for data_by_day in data:
+        new_day = {}
+        new_day['date'] = data_by_day['date']
+        new_day['moves'] = get_moves_by_day(data_by_day['locations'])
+        result.append(new_day)
+    return result
+
+
+def get_moves_by_day(data):
     moves = []
     cur_move = []
     last_endtime = None
     H1 = 30
-    H2 = 5
+    H2 = 15
 
     for record in data:
         if record['duration'] > H1:

@@ -12,11 +12,12 @@ from get_stop import date2str
 from periodic_probability_matrix import generate_matrix
 from get_most_proba_locations import get_most_proba_locations, pretty_print_most_proba_locations
 from apriori import freq_seq_mining
-from get_move import get_moves
+from get_move import get_moves_by_day, get_moves
 from get_transient_entropy import transient_entropy, entropy
 import pandas as pd
 import datetime
 from merge_locations import merge_locations, merge_locations_by_date, raw_merge_locations_by_date, check_error_points
+from move_stop_probability_matrix import generate_status_matrix
 
 app = Flask(__name__)
 cors = CORS(app)
@@ -107,8 +108,7 @@ def location_daycount_by_uid(uid):
     return make_response(dumps(results))
 
 
-@app.route("/location_by_uid/<uid>")
-def location_by_uid(uid):
+def fetch_uid_location_data(uid):
     cols = ['day', 'start_time', 'location']
     db.ping(True)
     cursor = db.cursor()
@@ -117,20 +117,17 @@ def location_by_uid(uid):
                         where uid = %s order by day, start_time"""
     cursor.execute(prepare_sql, (uid,))
     rows = cursor.fetchall()
-    results = [dict(zip(cols, row)) for row in rows]
+    return [dict(zip(cols, row)) for row in rows]
+
+
+@app.route("/location_by_uid/<uid>")
+def location_by_uid(uid):
+    results = fetch_uid_location_data(uid)
     return make_response(dumps(merge_locations(results)))
 
 
 def _location_by_uid_stop(uid):
-    cols = ['day', 'start_time', 'location']
-    db.ping(True)
-    cursor = db.cursor()
-    prepare_sql = """select log_date as day, start_time, location
-                        from location_logs_with_date
-                        where uid = %s order by day, start_time"""
-    cursor.execute(prepare_sql, (uid,))
-    rows = cursor.fetchall()
-    results = [dict(zip(cols, row)) for row in rows]
+    results = fetch_uid_location_data(uid)
     locations = merge_locations(results)
     get_delta(locations)
     locations = get_stop(locations, 30)
@@ -139,12 +136,12 @@ def _location_by_uid_stop(uid):
 
 def _location_by_uid_stop_holiday(uid):
     locations = _location_by_uid_stop(uid)
-    return [data for data in locations if  data['date'] in holidays]
+    return [data for data in locations if data['date'] in holidays]
 
 
 def _location_by_uid_stop_workday(uid):
     locations = _location_by_uid_stop(uid)
-    return [data for data in locations if  data['date'] not in holidays]
+    return [data for data in locations if data['date'] not in holidays]
 
 
 @app.route("/location_by_uid_stop/<uid>")
@@ -183,7 +180,7 @@ def entropy_by_uid_day(uid, day):
     rows = cursor.fetchall()
     results = merge_locations_by_date([dict(zip(cols, row)) for row in rows])
     get_delta_by_day(results)
-    moves = get_moves(results)
+    moves = get_moves_by_day(results)
     result = []
     for move in moves:
         for location in move:
@@ -447,6 +444,16 @@ def semantic_data(uid):
     rows = cursor.fetchall()
     results = [dict(zip(cols, row)) for row in rows]
     return make_response(dumps(list(results)))
+
+
+@app.route("/user_status/<uid>")
+def user_status(uid):
+    logs = fetch_uid_location_data(uid)
+    results = merge_locations(logs)
+    get_delta(results)
+    moves = get_moves(results)
+    stops = get_stop(results)
+    return make_response(dumps(generate_status_matrix(moves, stops)))
 
 
 if __name__ == "__main__":

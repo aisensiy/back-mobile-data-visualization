@@ -21,7 +21,6 @@ class PpmTestCase(unittest.TestCase):
         self.assertEqual(ppm.get_time_interval('20131229203100', '20131229234222'), (41, 46))
         self.assertEqual(ppm.get_time_interval('20131229204900', '20131229234222'), (42, 46))
 
-
     def test_generate_matrix(self):
         data = [
             {
