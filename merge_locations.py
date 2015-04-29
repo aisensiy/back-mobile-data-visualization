@@ -3,6 +3,8 @@
 
 
 def raw_merge_locations_by_date(logs):
+    if not logs:
+        return []
     result = []
     location = None
     start_time = None
