@@ -82,12 +82,41 @@ def gprs_count_by_hour(uid):
     return make_response(dumps(results))
 
 
+@app.route("/call_count_by_hour/<uid>")
+def call_count_by_hour(uid):
+    cols = ['uid', 'day', 'hour', 'count']
+    db.ping(True)
+    cursor = db.cursor()
+    prepare_sql = """select uid,
+                        day(start_time) as day,
+                        hour(start_time) as hour,
+                        count(1) as count
+                        from calls where uid = %s group by day, hour"""
+    cursor.execute(prepare_sql, (uid,))
+    rows = cursor.fetchall()
+    results = [dict(zip(cols, row)) for row in rows]
+    return make_response(dumps(results))
+
+
 @app.route("/gprs_count_by_day/<uid>")
 def gprs_count_by_day(uid):
     cols = ['uid', 'day', 'count']
     db.ping(True)
     cursor = db.cursor()
     prepare_sql = """select uid, day, sum(count) as count from gprs_hour_counts
+                        where uid = %s group by day"""
+    cursor.execute(prepare_sql, (uid,))
+    rows = cursor.fetchall()
+    results = [dict(zip(cols, row)) for row in rows]
+    return make_response(dumps(results))
+
+
+@app.route("/call_count_by_day/<uid>")
+def call_count_by_day(uid):
+    cols = ['uid', 'day', 'count']
+    db.ping(True)
+    cursor = db.cursor()
+    prepare_sql = """select uid, day(start_time) as day, count(1) as count from calls
                         where uid = %s group by day"""
     cursor.execute(prepare_sql, (uid,))
     rows = cursor.fetchall()
