@@ -143,6 +143,13 @@ def fetch_uid_business_data(uid):
     return rows
 
 
+def fetch_uid_district_data(uid):
+    rows = fetch_uid_semantic_data(uid)
+    for row in rows:
+        row['location'] = row['district']
+    return rows
+
+
 @app.route("/location_by_uid/<uid>")
 def location_by_uid(uid):
     results = fetch_uid_location_data(uid)
@@ -157,8 +164,8 @@ def _location_by_uid_stop(uid):
     return locations
 
 
-def _business_by_uid_stop(uid):
-    results = fetch_uid_business_data(uid)
+def _area_by_uid_stop(uid, area_func=fetch_uid_business_data):
+    results = area_func(uid)
     invalids = check_error_points(raw_merge_locations_by_date(results))
     results = filter(lambda x: (x['location'], x['start_time']) not in invalids, results)
     locations = merge_locations(results)
@@ -342,7 +349,13 @@ def app_log_by_uid_day(uid, day):
 
 @app.route("/semantic_proba_matrix/<uid>")
 def semantic_proba_matrix(uid):
-    locations = _business_by_uid_stop(uid)
+    locations = _area_by_uid_stop(uid, area_func=fetch_uid_business_data)
+    return make_response(dumps(generate_matrix(locations)))
+
+
+@app.route("/district_proba_matrix/<uid>")
+def district_proba_matrix(uid):
+    locations = _area_by_uid_stop(uid, area_func=fetch_uid_district_data)
     return make_response(dumps(generate_matrix(locations)))
 
 
