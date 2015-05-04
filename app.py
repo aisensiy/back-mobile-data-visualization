@@ -18,6 +18,7 @@ import pandas as pd
 import datetime
 from merge_locations import merge_locations, merge_locations_by_date, raw_merge_locations_by_date, check_error_points
 from move_stop_probability_matrix import generate_status_matrix
+from app_site_matrix import active_matrix
 
 app = Flask(__name__)
 cors = CORS(app)
@@ -534,6 +535,27 @@ def user_status(uid):
     moves = get_moves(results)
     stops = get_stop(results)
     return make_response(dumps(generate_status_matrix(moves, stops)))
+
+
+def fetch_uid_app_data(uid):
+    cols = ['day', 'minute', 'entity']
+    db.ping(True)
+    cursor = db.cursor()
+    prepare_sql = """select day, concat('201312', minute) as start_time,
+                        app_name
+                        from app_domain_logs
+                        where uid = %s and app_name != '其他' and
+                              site_channel_name not like %s
+                        order by day, minute"""
+    cursor.execute(prepare_sql, (uid, '被动%'))
+    rows = cursor.fetchall()
+    return [dict(zip(cols, row)) for row in rows]
+
+
+@app.route("/app_by_uid/<uid>")
+def app_by_uid(uid):
+    results = fetch_uid_app_data(uid)
+    return make_response(dumps(active_matrix(results)))
 
 
 if __name__ == "__main__":
