@@ -157,7 +157,7 @@ def fetch_uid_semantic_data(uid):
     prepare_sql = """select a.log_date as day, a.start_time, a.location,
                         b.district, b.business
                         from location_logs_with_date a
-                        left join location_desc b
+                        left join semantic b
                         on a.location = b.location
                         where a.uid = %s
                         order by a.start_time"""
@@ -395,6 +395,30 @@ def proba_matrix(uid):
     return make_response(dumps(generate_matrix(locations)))
 
 
+@app.route("/tag_proba_matrix/<uid>")
+def tag_proba_matrix(uid):
+    locations = _location_by_uid_stop(uid)
+    matrix = generate_matrix(locations)
+    semantic_data = _fetch_semantic_data(matrix.keys())
+    semantic_dict = {}
+    for row in semantic_data:
+        if row['tags']:
+            semantic_dict[row['location']] = dict(map(lambda x: (x.split(':')[0], int(x.split(':')[1])),
+                                                      row['tags'].split(' ')))
+        else:
+            semantic_dict[row['location']] = {'notag': 1}
+    tag_matrix = {}
+    for location, proba in matrix.items():
+        tag_dict = semantic_dict[location]
+        tag_weight = sum(v for v in tag_dict.values())
+        for tag, cnt in tag_dict.items():
+            tag_matrix.setdefault(tag, [0] * 48)
+            for i in range(48):
+                tag_matrix[tag][i] += proba[i] * cnt / tag_weight
+
+    return make_response(dumps(tag_matrix))
+
+
 @app.route("/proba_matrix_holiday/<uid>")
 def proba_matrix_holiday(uid):
     locations = _location_by_uid_stop_holiday(uid)
@@ -510,20 +534,24 @@ def call_histgram(uid):
     return make_response(dumps(results))
 
 
+def _fetch_semantic_data(locations):
+    cols = ['location', 'station_desc', 'tags', 'addr', 'business']
+    cursor = db.cursor()
+    prepare_sql = """select location, station_desc, tags, addr, business from semantic where location in (%s)""" % \
+        ','.join(map(lambda x: "'" + x + "'", locations))
+    cursor.execute(prepare_sql)
+    rows = cursor.fetchall()
+    return [dict(zip(cols, row)) for row in rows]
+
+
 @app.route("/semantic_data/<uid>")
 def semantic_data(uid):
     locations = _location_by_uid_stop(uid)
-    result = set()
+    locationlist = set()
     for day in locations:
         for item in day['locations']:
-            result.add(item['location'])
-    cols = ['location', 'station_desc', 'tags', 'addr', 'business']
-    cursor = db.cursor()
-    prepare_sql = """select location, station_desc, tags, addr, business from location_desc where location in (%s)""" % \
-        ','.join(map(lambda x: "'" + x + "'", result))
-    cursor.execute(prepare_sql)
-    rows = cursor.fetchall()
-    results = [dict(zip(cols, row)) for row in rows]
+            locationlist.add(item['location'])
+    results = _fetch_semantic_data(locationlist)
     return make_response(dumps(list(results)))
 
 
