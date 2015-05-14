@@ -588,11 +588,35 @@ def fetch_uid_app_data(uid):
     return [dict(zip(cols, row)) for row in rows]
 
 
+def fetch_uid_app_data_with_condition(uid, condition=''):
+    cols = ['day', 'minute', 'entity']
+    db.ping(True)
+    cursor = db.cursor()
+    prepare_sql = """select day, concat('201312', minute) as start_time,
+                        app_name
+                        from app_domain_logs
+                        where uid = %s and app_name != '其他' and
+                              site_channel_name not like %s and
+                              app_name != '微信' and
+                              app_name != '手机腾讯网' and
+                              app_name != 'QQ' and
+                              is_dirty is NULL
+                        order by day, minute"""
+    cursor.execute(prepare_sql, (uid, '被动%'))
+    rows = cursor.fetchall()
+    return [dict(zip(cols, row)) for row in rows]
+
+
 @app.route("/app_by_uid/<uid>")
 def app_by_uid(uid):
     results = fetch_uid_app_data(uid)
     return make_response(dumps(active_matrix(results)))
 
+
+@app.route("/app_by_uid_with_condition/<uid>")
+def app_by_uid_condition(uid):
+    results = fetch_uid_app_data_with_condition(uid)
+    return make_response(dumps(active_matrix(results)))
 
 if __name__ == "__main__":
     app.run(debug=True)
