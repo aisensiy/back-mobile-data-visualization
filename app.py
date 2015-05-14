@@ -18,6 +18,7 @@ import pandas as pd
 import datetime
 from merge_locations import merge_locations, merge_locations_by_date, raw_merge_locations_by_date, check_error_points
 from move_stop_probability_matrix import generate_status_matrix
+from move_stop_probability_matrix import get_status
 from app_site_matrix import active_matrix
 from tag_config import clean_tags
 
@@ -552,6 +553,16 @@ def semantic_data(uid):
     return make_response(dumps(list(results)))
 
 
+@app.route("/user_status_proba/<uid>")
+def user_status_proba(uid):
+    logs = fetch_uid_location_data(uid)
+    results = merge_locations(logs)
+    get_delta(results)
+    moves = get_moves(results)
+    stops = get_stop(results)
+    return make_response(dumps(generate_status_matrix(moves, stops)))
+
+
 @app.route("/user_status/<uid>")
 def user_status(uid):
     logs = fetch_uid_location_data(uid)
@@ -559,7 +570,7 @@ def user_status(uid):
     get_delta(results)
     moves = get_moves(results)
     stops = get_stop(results)
-    return make_response(dumps(generate_status_matrix(moves, stops)))
+    return make_response(dumps(get_status(moves, stops)))
 
 
 def fetch_uid_app_data(uid):
