@@ -19,6 +19,7 @@ import datetime
 from merge_locations import merge_locations, merge_locations_by_date, raw_merge_locations_by_date, check_error_points
 from move_stop_probability_matrix import generate_status_matrix
 from app_site_matrix import active_matrix
+from tag_config import clean_tags
 
 app = Flask(__name__)
 cors = CORS(app)
@@ -402,11 +403,7 @@ def tag_proba_matrix(uid):
     semantic_data = _fetch_semantic_data(matrix.keys())
     semantic_dict = {}
     for row in semantic_data:
-        if row['tags']:
-            semantic_dict[row['location']] = dict(map(lambda x: (x.split(':')[0], int(x.split(':')[1])),
-                                                      row['tags'].split(' ')))
-        else:
-            semantic_dict[row['location']] = {'notag': 1}
+        semantic_dict[row['location']] = clean_tags(row['tags'], 10)
     tag_matrix = {}
     for location, proba in matrix.items():
         tag_dict = semantic_dict[location]
