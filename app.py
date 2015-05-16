@@ -159,7 +159,7 @@ def fetch_uid_semantic_data(uid):
     prepare_sql = """select a.log_date as day, a.start_time, a.location,
                         b.district, b.business
                         from location_logs_with_date a
-                        left join semantic b
+                        left join semantic2 b
                         on a.location = b.location
                         where a.uid = %s
                         order by a.start_time"""
@@ -404,7 +404,7 @@ def tag_proba_matrix(uid):
     semantic_data = _fetch_semantic_data(matrix.keys())
     semantic_dict = {}
     for row in semantic_data:
-        semantic_dict[row['location']] = clean_tags(row['tags'], 10)
+        semantic_dict[row['location']] = clean_tags(row['tags'], 5)
     tag_matrix = {}
     for location, proba in matrix.items():
         tag_dict = semantic_dict[location]
@@ -535,7 +535,7 @@ def call_histgram(uid):
 def _fetch_semantic_data(locations):
     cols = ['location', 'station_desc', 'tags', 'addr', 'business']
     cursor = db.cursor()
-    prepare_sql = """select location, station_desc, tags, addr, business from semantic where location in (%s)""" % \
+    prepare_sql = """select location, station_desc, tags, addr, business from semantic2 where location in (%s)""" % \
         ','.join(map(lambda x: "'" + x + "'", locations))
     cursor.execute(prepare_sql)
     rows = cursor.fetchall()
@@ -600,7 +600,7 @@ def fetch_uid_app_data_with_condition(uid, condition=''):
                               app_name != '微信' and
                               app_name != '手机腾讯网' and
                               app_name != 'QQ' and
-                              is_dirty is NULL
+                              dirty is NULL
                         order by day, minute"""
     cursor.execute(prepare_sql, (uid, '被动%'))
     rows = cursor.fetchall()
