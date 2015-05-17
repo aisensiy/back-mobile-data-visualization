@@ -266,14 +266,14 @@ def entropy_by_uid_day(uid, day):
 def get_speed_by_day(all_rows, day):
     timestamps = pd.date_range(start=day + '001500',
                                end=day + '235959',
-                               freq='20Min')
+                               freq='30Min')
     cols = ['start_time', 'location']
     speeds = []
 
     if len(all_rows) == 0:
         return speeds
 
-    delta_t = 20
+    delta_t = 60
     for i in range(len(timestamps)):
         start_time = timestamps[i].to_datetime() - datetime.timedelta(minutes=delta_t / 2)
         end_time = timestamps[i].to_datetime() + datetime.timedelta(minutes=delta_t / 2)
@@ -282,7 +282,7 @@ def get_speed_by_day(all_rows, day):
         if len(rows) == 0:
             speeds.append({
                 'time': date2str(timestamps[i]),
-                'speed': -1
+                'speed': 0
             })
             continue
         rows = merge_locations_by_date([dict(zip(cols, row)) for row in rows])
