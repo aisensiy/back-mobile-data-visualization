@@ -38,7 +38,7 @@ def usercount():
     db.ping(True)
     cursor = db.cursor()
     prepare_sql = """
-    select count(1) from users where high = 7"""
+    select count(1) from users where high >= '7'"""
     cursor.execute(prepare_sql)
     row = cursor.fetchone()
     return make_response(dumps(row[0]))
@@ -65,7 +65,7 @@ def users(offset, limit):
     cursor = db.cursor()
     prepare_sql = """
     select uid, gender, age, brand_chn, call_fee, gprs_fee, dept_name
-        from users where high = 7 limit %s offset %s"""
+        from users where high >= '7' limit %s offset %s"""
     cursor.execute(prepare_sql, (limit, offset))
     rows = cursor.fetchall()
     results = [dict(zip(cols, row)) for row in rows]
@@ -159,7 +159,7 @@ def fetch_uid_semantic_data(uid):
     prepare_sql = """select a.log_date as day, a.start_time, a.location,
                         b.district, b.business
                         from location_logs_with_date a
-                        left join semantic2 b
+                        left join semantic4 b
                         on a.location = b.location
                         where a.uid = %s
                         order by a.start_time"""
@@ -196,7 +196,7 @@ def _location_by_uid_stop(uid):
     return locations
 
 
-def _area_by_uid_stop(uid, area_func=fetch_uid_business_data):
+def area_by_uid_stop(uid, area_func=fetch_uid_business_data):
     results = area_func(uid)
     invalids = check_error_points(raw_merge_locations_by_date(results))
     results = filter(lambda x: (x['location'], x['start_time']) not in invalids, results)
@@ -381,13 +381,13 @@ def app_log_by_uid_day(uid, day):
 
 @app.route("/semantic_proba_matrix/<uid>")
 def semantic_proba_matrix(uid):
-    locations = _area_by_uid_stop(uid, area_func=fetch_uid_business_data)
+    locations = area_by_uid_stop(uid, area_func=fetch_uid_business_data)
     return make_response(dumps(generate_matrix(locations)))
 
 
 @app.route("/district_proba_matrix/<uid>")
 def district_proba_matrix(uid):
-    locations = _area_by_uid_stop(uid, area_func=fetch_uid_district_data)
+    locations = area_by_uid_stop(uid, area_func=fetch_uid_district_data)
     return make_response(dumps(generate_matrix(locations)))
 
 
@@ -401,7 +401,7 @@ def proba_matrix(uid):
 def tag_proba_matrix(uid):
     locations = _location_by_uid_stop(uid)
     matrix = generate_matrix(locations)
-    semantic_data = _fetch_semantic_data(matrix.keys())
+    semantic_data = fetch_semantic_data(matrix.keys())
     semantic_dict = {}
     for row in semantic_data:
         semantic_dict[row['location']] = clean_tags(row['tags'], 5)
@@ -409,10 +409,12 @@ def tag_proba_matrix(uid):
     for location, proba in matrix.items():
         tag_dict = semantic_dict[location]
         tag_weight = sum(v for v in tag_dict.values())
+        if tag_weight == 0:
+            continue
         for tag, cnt in tag_dict.items():
             tag_matrix.setdefault(tag, [0] * 48)
             for i in range(48):
-                tag_matrix[tag][i] += proba[i] * cnt / tag_weight
+                tag_matrix[tag][i] += (proba[i] * cnt + 0.001) / (tag_weight + 0.001)
 
     return make_response(dumps(tag_matrix))
 
@@ -480,7 +482,7 @@ def web_req_histgram(uid):
     db.ping(True)
     cursor = db.cursor()
     prepare_sql = """select cast(substring(minute, 3, 2) as SIGNED) as hour, count(distinct minute) as count
-                        from app_domain_logs where uid = %s group by hour"""
+                        from app_domain_logs where uid = %s and dirty is NULL group by hour"""
 
     cursor.execute(prepare_sql, (uid,))
     rows = cursor.fetchall()
@@ -532,10 +534,10 @@ def call_histgram(uid):
     return make_response(dumps(results))
 
 
-def _fetch_semantic_data(locations):
+def fetch_semantic_data(locations):
     cols = ['location', 'station_desc', 'tags', 'addr', 'business']
     cursor = db.cursor()
-    prepare_sql = """select location, station_desc, tags, addr, business from semantic2 where location in (%s)""" % \
+    prepare_sql = """select location, station_desc, tags, addr, business from semantic4 where location in (%s)""" % \
         ','.join(map(lambda x: "'" + x + "'", locations))
     cursor.execute(prepare_sql)
     rows = cursor.fetchall()
@@ -549,7 +551,7 @@ def semantic_data(uid):
     for day in locations:
         for item in day['locations']:
             locationlist.add(item['location'])
-    results = _fetch_semantic_data(locationlist)
+    results = fetch_semantic_data(locationlist)
     return make_response(dumps(list(results)))
 
 
@@ -582,6 +584,7 @@ def fetch_uid_app_data(uid):
                         from app_domain_logs
                         where uid = %s and app_name != '其他' and
                               site_channel_name not like %s
+                              and dirty is NULL
                         order by day, minute"""
     cursor.execute(prepare_sql, (uid, '被动%'))
     rows = cursor.fetchall()

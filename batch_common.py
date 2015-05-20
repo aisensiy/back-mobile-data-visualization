@@ -7,7 +7,8 @@ dbconfig = {
     'host': HOST,
     'user': USER,
     'passwd': PASSWD,
-    'db': DATABASE
+    'db': DATABASE,
+    'charset': 'utf8'
 }
 
 
