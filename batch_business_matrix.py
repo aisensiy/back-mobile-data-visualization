@@ -5,10 +5,15 @@ from db import MySQL as DB
 from batch_common import dbconfig
 from batch_common import fetch_users
 from batch_common import fetch_semantic_logs
+from batch_district import area_by_uid_stop
 from merge_locations import merge_locations
-import sys
+from periodic_probability_matrix import generate_matrix
 import json
 from csv import DictWriter
+import sys
+
+reload(sys)
+exec("sys.setdefaultencoding('utf-8')");
 
 
 def get_business_logs(uid, db):
@@ -25,11 +30,11 @@ def run():
     db = DB(dbconfig)
 
     for uid in fetch_users(db):
-        data = get_business_logs(uid, db)
-        locations = merge_locations(data)
+        locations = area_by_uid_stop(uid, db, get_business_logs)
+        matrix = generate_matrix(locations)
         writer.writerow({
             'uid': uid,
-            'data': json.dumps(locations)
+            'data': json.dumps(matrix)
         })
     output.close()
 
