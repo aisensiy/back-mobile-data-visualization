@@ -16,7 +16,7 @@ def fetch_users(db, pagecnt=10000):
     offset = 0
     while True:
         users = db.fetchall("""
-                            select uid from users where high = '7'
+                            select uid from users where high >= '7'
                             limit %s offset %s""", (pagecnt, offset * pagecnt))
         if not users:
             break
