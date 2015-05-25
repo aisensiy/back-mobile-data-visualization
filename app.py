@@ -610,15 +610,61 @@ def fetch_uid_app_data_with_condition(uid, condition=''):
     return [dict(zip(cols, row)) for row in rows]
 
 
+def fetch_uid_app_type_data(uid):
+    cols = ['day', 'minute', 'entity']
+    db.ping(True)
+    cursor = db.cursor()
+    prepare_sql = """select day, concat('201312', minute) as start_time,
+                        app_type_name
+                        from app_domain_logs
+                        where uid = %s and app_name != '其他' and
+                              site_channel_name not like %s
+                              and dirty is NULL
+                              and app_type_name in ('旅游', '游戏', '电商购物', '社交沟通', '社区论坛', '网页浏览', '视频', '邮箱', '阅读', '音乐')
+                        order by day, minute"""
+    cursor.execute(prepare_sql, (uid, '被动%'))
+    rows = cursor.fetchall()
+    return [dict(zip(cols, row)) for row in rows]
+
+
+def fetch_uid_app_type_data_with_condition(uid, condition=''):
+    cols = ['day', 'minute', 'entity']
+    db.ping(True)
+    cursor = db.cursor()
+    prepare_sql = """select day, concat('201312', minute) as start_time,
+                        app_type_name
+                        from app_domain_logs
+                        where uid = %s and app_name != '其他' and
+                              site_channel_name not like %s and
+                              app_type_name in ('旅游', '游戏', '电商购物', '社区论坛', '网页浏览', '视频', '邮箱', '阅读', '音乐') and
+                              dirty is NULL
+                        order by day, minute"""
+    cursor.execute(prepare_sql, (uid, '被动%'))
+    rows = cursor.fetchall()
+    return [dict(zip(cols, row)) for row in rows]
+
+
 @app.route("/app_by_uid/<uid>")
 def app_by_uid(uid):
     results = fetch_uid_app_data(uid)
     return make_response(dumps(active_matrix(results)))
 
 
+@app.route("/app_type_by_uid/<uid>")
+def app_type_by_uid(uid):
+    results = fetch_uid_app_type_data(uid)
+    return make_response(dumps(active_matrix(results)))
+
+
 @app.route("/app_by_uid_with_condition/<uid>")
 def app_by_uid_condition(uid):
     results = fetch_uid_app_data_with_condition(uid)
+    return make_response(dumps(active_matrix(results)))
+
+
+@app.route("/app_type_by_uid_with_condition/<uid>")
+def app_type_by_uid_condition(uid):
+    results = fetch_uid_app_type_data_with_condition(uid)
     return make_response(dumps(active_matrix(results)))
 
 if __name__ == "__main__":
