@@ -8,6 +8,7 @@ import MySQLdb
 import MySQLdb.converters
 from config import HOST, USER, PASSWD, DATABASE
 from get_stop import get_stop, get_delta, get_stop_by_day, get_delta_by_day
+from get_stop import str2date
 from get_stop import date2str
 from periodic_probability_matrix import generate_matrix
 from get_most_proba_locations import get_most_proba_locations, pretty_print_most_proba_locations
@@ -38,7 +39,7 @@ def usercount():
     db.ping(True)
     cursor = db.cursor()
     prepare_sql = """
-    select count(1) from users where high >= '7'"""
+    select count(1) from users where high >= '8'"""
     cursor.execute(prepare_sql)
     row = cursor.fetchone()
     return make_response(dumps(row[0]))
@@ -239,28 +240,31 @@ def raw_location_by_uid_day(uid, day):
     return make_response(dumps(results))
 
 
-@app.route("/entropy_by_uid_day/<uid>/<day>")
-def entropy_by_uid_day(uid, day):
-    day = '201312' + day
-    cols = ['start_time', 'location']
-    db.ping(True)
-    cursor = db.cursor()
-    prepare_sql = """select start_time, location
-                        from location_logs_with_date
-                        where uid = %s and log_date = %s order by start_time"""
-    cursor.execute(prepare_sql, (uid, day))
-    rows = cursor.fetchall()
-    results = merge_locations_by_date([dict(zip(cols, row)) for row in rows])
-    get_delta_by_day(results)
-    moves = get_moves_by_day(results)
-    result = []
-    for move in moves:
-        for location in move:
-            result.append({
-                'entropy': transient_entropy(location, move),
-                'time': location['start_time']
-            })
-    return make_response(dumps(result))
+# @app.route("/entropy_by_uid_day/<uid>/<day>")
+# def entropy_by_uid_day(uid, day):
+#     day = '201312' + day
+#     cols = ['start_time', 'location']
+#     db.ping(True)
+#     cursor = db.cursor()
+#     prepare_sql = """select start_time, location
+#                         from location_logs_with_date
+#                         where uid = %s and log_date = %s order by start_time"""
+#     cursor.execute(prepare_sql, (uid, day))
+#     rows = cursor.fetchall()
+#     results = merge_locations_by_date([dict(zip(cols, row)) for row in rows])
+#     get_delta_by_day(results)
+#     print results
+#     result = []
+#     delta_t = 60
+#     for location in results:
+#         tm = str2date(location['start_time'])
+#         start_time = tm - datetime.timedelta(minutes=delta_t / 2)
+#         end_time = tm + datetime.timedelta(minutes=delta_t / 2)
+#         result.append({
+#             'entropy': entropy(move, delta_t, [start_time, end_time]),
+#             'time': location['start_time']
+#         })
+# return make_response(dumps(result))
 
 
 def get_speed_by_day(all_rows, day):
@@ -295,6 +299,42 @@ def get_speed_by_day(all_rows, day):
     return speeds
 
 
+def get_speed_by_day_at_change_point(all_rows, day):
+    cols = ['start_time', 'location']
+    speeds = []
+    results = merge_locations_by_date([dict(zip(cols, row)) for row in all_rows])
+
+    points = set()
+    for location in results:
+        points.add(location['start_time'])
+        points.add(location['end_time'])
+    points = map(lambda x: str2date(x), sorted(points))
+
+    if len(all_rows) == 0:
+        return speeds
+
+    delta_t = 60
+    for i in range(len(points)):
+        start_time = points[i] - datetime.timedelta(minutes=delta_t / 2)
+        end_time = points[i] + datetime.timedelta(minutes=delta_t / 2)
+        rows = filter(lambda x: date2str(start_time) <= x[0] <= date2str(end_time),
+                      all_rows)
+        if len(rows) == 0:
+            speeds.append({
+                'time': date2str(points[i]),
+                'speed': 0
+            })
+            continue
+        rows = merge_locations_by_date([dict(zip(cols, row)) for row in rows])
+        get_delta_by_day(rows)
+        speed = entropy(rows, delta_t, [start_time, end_time])
+        speeds.append({
+            'time': date2str(points[i]),
+            'speed': speed
+        })
+    return speeds
+
+
 @app.route("/speed_by_uid_day/<uid>/<day>")
 def speed_by_uid_day(uid, day):
     day = '201312' + day
@@ -308,6 +348,22 @@ def speed_by_uid_day(uid, day):
     cursor.execute(prepare_sql, (uid, day))
     all_rows = cursor.fetchall()
     speeds = get_speed_by_day(all_rows, day)
+    return make_response(dumps(speeds))
+
+
+@app.route("/speed_by_uid_day_at_change_point/<uid>/<day>")
+def speed_by_uid_day_at_change_point(uid, day):
+    day = '201312' + day
+    speeds = []
+
+    db.ping(True)
+    cursor = db.cursor()
+    prepare_sql = """select start_time, location
+                        from location_logs_with_date
+                        where uid = %s and log_date = %s order by start_time"""
+    cursor.execute(prepare_sql, (uid, day))
+    all_rows = cursor.fetchall()
+    speeds = get_speed_by_day_at_change_point(all_rows, day)
     return make_response(dumps(speeds))
 
 
@@ -468,7 +524,7 @@ def _stop_to_seq(locations):
 def freq_seq(uid):
     locations = _location_by_uid_stop(uid)
     dataset = _stop_to_seq(locations)
-    L, supportData = freq_seq_mining(dataset, 5)
+    L, supportData = freq_seq_mining(dataset, 4)
     flattenL = []
     for ck in L:
         flattenL += ck
