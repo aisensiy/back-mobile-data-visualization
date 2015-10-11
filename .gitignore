@@ -2,3 +2,5 @@
 *.swp
 config.py
 *.pyc
+*.csv
+*.json
